@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#dc2626">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="SHAHI">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="https://res.cloudinary.com/stw0awze/image/upload/v1792609127/Shahi_Taste_the_Difference_Logo.png">
+  <link rel="apple-touch-icon" href="https://res.cloudinary.com/stw0awze/image/upload/v1792609127/Shahi_Taste_the_Difference_Logo.png">
+  <title>SHAHI</title>
+  <link rel="stylesheet" href="css/app.css">
+  <script src="config.js"></script>
+</head>
+<body class="app-body">
+  <!-- Status bar simulation for web -->
+  <div class="status-bar" id="status-bar"></div>
+
+  <div class="app" id="app">
+    <!-- Header -->
+    <header class="app-header" role="banner">
+      <div class="header-content">
+        <div class="header-left">
+          <img src="https://res.cloudinary.com/stw0awze/image/upload/v1792609127/Shahi_Taste_the_Difference_Logo.png" alt="SHAHI Logo" class="header-logo">
+          <h1 class="app-title">SHAHI</h1>
+        </div>
+        <div class="header-right" id="header-right">
+          <button class="btn-icon" id="btn-new-order" aria-label="New Order">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content (Scrollable View Container) -->
+    <main class="app-main" role="main">
+      <div class="view-container" id="view-container">
+        <!-- Views injected here by JS -->
+      </div>
+    </main>
+
+    <!-- Bottom Navigation -->
+    <nav class="bottom-nav" role="navigation" aria-label="Main navigation">
+      <button class="nav-item active" data-nav="home" aria-label="Home" aria-current="page">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        <span class="nav-label">Home</span>
+      </button>
+      <button class="nav-item" data-nav="orders" aria-label="Orders">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        <span class="nav-label">Orders</span>
+      </button>
+      <button class="nav-item" data-nav="customers" aria-label="Customers">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+        <span class="nav-label">Customers</span>
+      </button>
+      <button class="nav-item" data-nav="products" aria-label="Products">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        <span class="nav-label">Products</span>
+      </button>
+      <button class="nav-item" data-nav="admin" aria-label="More" style="display: none;">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><path d="M1 9h2M17 9h2M1 14h2M17 14h2M7 18h1M4 18h1M20 18h1M15 18h1M10 12h1M13 12h1"/></svg>
+        <span class="nav-label">More</span>
+      </button>
+    </nav>
+
+    <!-- Floating Action Button (Primary Action) -->
+    <button class="fab" id="fab-primary" aria-label="Create New Order">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    </button>
+  </div>
+
+  <!-- Toast Container -->
+  <div id="toast-container" class="toast-container" aria-live="polite"></div>
+
+  <!-- Loading Overlay -->
+  <div id="loading-overlay" class="loading-overlay" role="status" aria-label="Loading">
+    <div class="spinner"></div>
+  </div>
+
+  <!-- Sheet Overlay (Native-style bottom sheet) -->
+  <div class="sheet-overlay" id="sheet-overlay"></div>
+
+  <script src="js/core.js"></script>
+  <script src="js/start.js"></script>
+  <script src="js/views-home.js"></script>
+  <script src="js/views-orders.js"></script>
+  <script src="js/views-customers.js"></script>
+  <script src="js/views-products.js"></script>
+  <script src="js/views-admin.js"></script>
+</body>
+</html>
