@@ -223,6 +223,9 @@ body.login-page .login { margin-top: 6vh; padding: 28px 22px; background: var(--
 .bill-foot { text-align: center; font-weight: 700; color: var(--red); padding: 10px; border-top: 1px dashed var(--line); }
 .stamp { border: 3px solid var(--red); color: var(--red); font-weight: 800; text-align: center; padding: 6px; border-radius: 10px; margin: 8px 0; letter-spacing: .1em; }
 
+/* What the 2 inch thermal printer will print: 32 letters a line, like the paper. */
+.receipt { font: 13px/1.35 ui-monospace, Consolas, "Courier New", monospace; width: 34ch; max-width: 100%; margin: 8px auto; padding: 12px 1ch; background: #fff; border: 1px dashed var(--field); border-radius: 6px; white-space: pre; overflow-x: auto; color: #000; }
+
 /* Items hidden by a search or filter stay hidden, whatever their layout. */
 [hidden] { display: none !important; }
 

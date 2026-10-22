@@ -250,7 +250,9 @@ VIEWS.bill = async (parts, query) => {
   let file = null;
   getFile().then((f) => (file = f), () => {});
 
-  ACT.print = () => window.print();
+  // Print: the way chosen on this phone (2 inch Bluetooth printer, or a normal printer); the first time it asks.
+  ACT.print = () => (printWay.get() ? printBill(o, printWay.get()) : choosePrinter(o));
+  ACT.changePrinter = () => choosePrinter(o);
   // WhatsApp takes no file this way, so the message carries a link that opens the bill PDF. The person presses send.
   ACT.waCustomer = () => window.open(wa(o.customer_mobile), '_blank', 'noopener');
   ACT.waBusiness = () => window.open(wa(s.business_whatsapp), '_blank', 'noopener');
@@ -306,8 +308,9 @@ VIEWS.bill = async (parts, query) => {
     </article>
     <div class="btns"><button class="btn big wa" data-act="waCustomer">${icon('wa', 20)} Send to customer on WhatsApp</button></div>
     <p class="muted small no-print">${o.customer_mobile ? `Opens WhatsApp on ${esc(o.customer_mobile)}` : 'No mobile number for this customer: WhatsApp opens and you choose the chat,'} with the bill written and a link to the PDF. Press send there.</p>
+    <div class="btns"><button class="btn big" data-act="print">${icon('print', 20)} Print</button></div>
+    <p class="muted small no-print">${printWay.get() ? `Prints on: ${esc(PRINT_WAYS[printWay.get()] || '')}. ` : ''}<a href="#" data-act="changePrinter">${printWay.get() ? 'Change printer' : 'Choose printer'}</a></p>
     <div class="btns">
-      <button class="btn light" data-act="print">${icon('print', 20)} Print</button>
       <button class="btn light" data-act="shareBill">${icon('share', 20)} Share PDF</button>
       <a class="btn light" href="${pdfUrl}" target="_blank" rel="noopener">${icon('file', 20)} Open PDF</a>
     </div>

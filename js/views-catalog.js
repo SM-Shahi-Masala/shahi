@@ -217,14 +217,14 @@ VIEWS.product = async (parts) => {
     };
     const saved = (await api(isNew ? 'POST' : 'PUT', isNew ? '/products' : `/products/${p.id}`, body)).product;
     // Pictures go after the product is saved, because a new pack gets its id only then.
-    let failed = 0;
-    for (const id of F.remove) await api('POST', `/images/${id}/delete`).catch(() => failed++);
+    let failed = '';
+    for (const id of F.remove) await api('POST', `/images/${id}/delete`).catch((e) => (failed = e.message));
     for (const [slot, data] of Object.entries(F.pending)) {
       const v = slot === 'main' ? null : saved.variants.find((x) => x.active && 'p:' + packKey(x.pack_name) === slot);
       if (slot !== 'main' && !v) continue; // the pack was removed or renamed after its picture was chosen
-      await api('POST', `/products/${saved.id}/images`, { data, variant_id: v ? v.id : null }).catch(() => failed++);
+      await api('POST', `/products/${saved.id}/images`, { data, variant_id: v ? v.id : null }).catch((e) => (failed = e.message));
     }
-    toast(failed ? 'Product saved, but a picture could not be saved. Open it and try again.' : 'Product saved', !!failed);
+    toast(failed ? `Product saved, but a picture was not saved: ${failed}` : 'Product saved', !!failed);
     go('#/products');
   };
   ACT.archive = () =>
