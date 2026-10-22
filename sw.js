@@ -1,6 +1,8 @@
-// Keeps the app screens available when the network is weak. Data is never cached:
-// it comes from another address (Supabase), or from /api on this computer, and both are left alone.
-const CACHE = 'shahi-v2';
+// The app files (HTML, CSS, JavaScript, icons) are kept on the phone: the app opens at once from them,
+// and the newest version is fetched in the background (it is used on the next opening).
+// Data is never cached here: it comes from Supabase (another address), or from /api on this computer, and both are left alone.
+// Change CACHE after uploading new files, so phones throw the old copy away.
+const CACHE = 'shahi-v3';
 const HOME = new URL('./', location.href).href;
 
 self.addEventListener('install', () => self.skipWaiting());
@@ -17,14 +19,19 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET' || url.origin !== location.origin || url.pathname.startsWith('/api/')) return;
   e.respondWith(
-    fetch(e.request)
-      .then((res) => {
-        if (res.ok) {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put(e.request, copy));
-        }
-        return res;
-      })
-      .catch(() => caches.match(e.request).then((hit) => hit || caches.match(HOME)))
+    caches.open(CACHE).then(async (cache) => {
+      const saved = await cache.match(e.request);
+      const fresh = fetch(e.request)
+        .then((res) => {
+          if (res.ok) cache.put(e.request, res.clone());
+          return res;
+        })
+        .catch(() => saved || cache.match(HOME));
+      if (saved) {
+        e.waitUntil(fresh.catch(() => {}));
+        return saved;
+      }
+      return fresh;
+    })
   );
 });

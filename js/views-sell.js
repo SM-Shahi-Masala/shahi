@@ -11,7 +11,7 @@ const orderCard = (o) => `<a class="card" href="#/bill/${o.id}" data-item>
 
 // ---------- home ----------
 VIEWS.home = async () => {
-  const d = await api('GET', '/home');
+  const d = await cachedGet('/home');
   ACT.findCustomer = () => go('#/customers?q=' + encodeURIComponent($('#h-q').value.trim()));
   const start = [];
   if (can('products') && !d.counts.products) start.push(`<a class="banner warn" href="#/product/new"><span>Start here: add your first product, its pack sizes and rates.</span>${icon('plus')}</a>`);
@@ -56,7 +56,7 @@ function periodRange(p) {
 VIEWS.orders = async () => {
   const [from, to] = periodRange(ORDER_FILTER.period);
   const qs = new URLSearchParams({ from, to, status: ORDER_FILTER.status });
-  const { list } = await api('GET', '/orders?' + qs);
+  const { list } = await cachedGet('/orders?' + qs);
   ACT.period = (el) => {
     ORDER_FILTER.period = el.dataset.val;
     refresh();
@@ -119,7 +119,7 @@ VIEWS.order = async (parts, query) => {
 
   // Step 1: the customer.
   if (!DRAFT.customer) {
-    CUSTOMERS_CACHE = CUSTOMERS_CACHE || (await api('GET', '/customers')).list;
+    CUSTOMERS_CACHE = (await cachedGet('/customers')).list;
     const list = CUSTOMERS_CACHE;
     const results = (q) => {
       const words = q.split(/\s+/).map(squash).filter(Boolean);
@@ -141,7 +141,7 @@ VIEWS.order = async (parts, query) => {
 
   // Step 2: products and quantities, with the rate this customer pays.
   const c = DRAFT.customer;
-  const { list } = await api('GET', `/products?customer_id=${c.id}`);
+  const { list } = await cachedGet(`/products?customer_id=${c.id}`);
   const VARS = {};
   for (const p of list) for (const v of p.variants) VARS[v.id] = { ...v, product: p.name };
   // Packs that are no longer sold drop out of the bill.
@@ -220,7 +220,7 @@ VIEWS.order = async (parts, query) => {
 
 // ---------- the bill ----------
 VIEWS.bill = async (parts, query) => {
-  const o = (await api('GET', `/orders/${encodeURIComponent(parts[1] || '')}`)).order;
+  const o = (await cachedGet(`/orders/${encodeURIComponent(parts[1] || '')}`)).order;
   const s = S.boot.settings;
   const fileName = `Bill-${o.bill_no}.pdf`;
   // The bill link: works without login, but only with the long random code of this bill.

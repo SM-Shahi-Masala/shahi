@@ -33,7 +33,7 @@ VIEWS.reports = async () => {
     })(),
   };
   const [from, to] = REPORT.period === 'custom' ? [REPORT.from, REPORT.to] : ranges[REPORT.period];
-  const r = await api('GET', `/reports/sales?from=${from}&to=${to}`);
+  const r = await cachedGet(`/reports/sales?from=${from}&to=${to}`);
   ACT.period = (el) => {
     REPORT.period = el.dataset.val;
     refresh();

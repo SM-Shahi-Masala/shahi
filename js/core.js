@@ -111,13 +111,82 @@ async function api(method, url, body) {
   const data = await res.json().catch(() => null);
   if (res.status === 401 && url !== '/login') {
     session.set('');
+    store.clear();
     if (S.user) {
       S.user = null;
       render();
     }
   }
   if (!res.ok) throw new Error((data && data.error) || 'Something went wrong. Try again.');
+  // Anything saved can change what other screens show: they all check again on their next opening.
+  if (method !== 'GET') store.stale();
   return data;
+}
+
+// ---------- the phone's own copy of what it saw last ----------
+// A screen opens at once from this copy; the server is asked again in the background and the screen is drawn again
+// when something changed. Making a bill always goes to the server (it works out rates, totals and the bill number).
+// Cleared on logout, so the next person on this phone sees nothing of the last one.
+const FRESH_MS = 20000; // an answer younger than this is not asked again
+const store = {
+  key: (url) => 'c:' + url,
+  read(url) {
+    try {
+      return JSON.parse(localStorage.getItem(store.key(url)) || 'null');
+    } catch {
+      return null;
+    }
+  },
+  write(url, data) {
+    const text = JSON.stringify({ at: Date.now(), data });
+    try {
+      localStorage.setItem(store.key(url), text);
+    } catch {
+      // The phone's space for this site is full: start again with an empty copy.
+      store.clear();
+      try {
+        localStorage.setItem(store.key(url), text);
+      } catch {}
+    }
+  },
+  each(fn) {
+    try {
+      for (const k of Object.keys(localStorage)) if (k.startsWith('c:')) fn(k);
+    } catch {}
+  },
+  stale() {
+    store.each((k) => {
+      try {
+        const v = JSON.parse(localStorage.getItem(k));
+        v.at = 0;
+        localStorage.setItem(k, JSON.stringify(v));
+      } catch {}
+    });
+  },
+  clear() {
+    store.each((k) => localStorage.removeItem(k));
+  },
+};
+
+// GET with the phone's copy: the saved answer at once (and a quiet check with the server), or the server's answer when nothing is saved yet.
+async function cachedGet(url) {
+  const hit = store.read(url);
+  if (!hit) {
+    const data = await api('GET', url);
+    store.write(url, data);
+    return data;
+  }
+  if (Date.now() - hit.at > FRESH_MS) {
+    const token = renderToken;
+    api('GET', url)
+      .then((fresh) => {
+        store.write(url, fresh);
+        // Drawn again only when something changed, and only if the person is still on that screen.
+        if (JSON.stringify(fresh) !== JSON.stringify(hit.data) && token === renderToken) render(true);
+      })
+      .catch(() => {});
+  }
+  return hit.data;
 }
 
 let toastTimer;
@@ -245,7 +314,7 @@ function shell(name) {
 let renderToken = 0;
 async function render(keepScroll) {
   if (!S.user) return viewLogin();
-  if (Date.now() - S.bootAt > 15 * 60 * 1000) await loadBoot().catch(() => {});
+  if (Date.now() - S.bootAt > 15 * 60 * 1000) await loadBoot(true).catch(() => {});
   if (!S.user) return viewLogin();
 
   const { parts, query } = parseHash();
@@ -305,12 +374,32 @@ document.addEventListener('submit', (e) => {
 window.addEventListener('hashchange', () => render());
 
 // ---------- login: mobile number + 6 digit PIN ----------
-async function loadBoot() {
-  S.boot = await api('GET', '/bootstrap');
+function useBoot(boot) {
+  S.boot = boot;
   S.bootAt = Date.now();
-  S.user = S.boot.user;
-  S.business = S.boot.settings.business_name || S.business;
+  S.user = boot.user;
+  S.business = boot.settings.business_name || S.business;
   document.title = S.business;
+}
+// fromCache: when the app opens, who is logged in (and the settings) come from the phone's copy at once,
+// and are checked with the server in the background (a login that ended shows the login screen then).
+async function loadBoot(fromCache) {
+  const hit = fromCache && store.read('/bootstrap');
+  if (hit) {
+    useBoot(hit.data);
+    api('GET', '/bootstrap')
+      .then((boot) => {
+        store.write('/bootstrap', boot);
+        const changed = JSON.stringify(boot) !== JSON.stringify(hit.data);
+        useBoot(boot);
+        if (changed) render(true);
+      })
+      .catch(() => {});
+    return;
+  }
+  const boot = await api('GET', '/bootstrap');
+  store.write('/bootstrap', boot);
+  useBoot(boot);
 }
 
 const pinBox = (id, autocomplete, required = true) =>
@@ -358,6 +447,7 @@ VIEWS.pin = async () => {
 async function logout() {
   await api('POST', '/logout').catch(() => {});
   session.set('');
+  store.clear();
   S.user = null;
   S.boot = null;
   resetDraft();

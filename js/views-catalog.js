@@ -48,7 +48,7 @@ const rateHistory = (list) =>
 // ---------- products list ----------
 VIEWS.products = async (parts, query) => {
   const archived = query.show === 'archived';
-  const { list } = await api('GET', archived ? '/products?archived=1' : '/products?all=1');
+  const { list } = await cachedGet(archived ? '/products?archived=1' : '/products?all=1');
   ACT.archive = (el) =>
     askFirst('Archive this product?', 'It will not be offered for new bills. Old bills keep showing it. You can bring it back any time.', 'Yes, archive', async () => {
       await api('POST', `/products/${el.dataset.id}/archive`);
@@ -257,7 +257,7 @@ VIEWS.product = async (parts) => {
 // ---------- customers ----------
 VIEWS.customers = async (parts, query) => {
   const archived = query.show === 'archived';
-  const { list } = await api('GET', '/customers' + (archived ? '?archived=1' : ''));
+  const { list } = await cachedGet('/customers' + (archived ? '?archived=1' : ''));
   ACT.ready = () => {
     if (query.q) {
       $('#quick-q').value = query.q;
@@ -280,7 +280,7 @@ VIEWS.customers = async (parts, query) => {
 };
 
 VIEWS.customer = async (parts) => {
-  const d = await api('GET', `/customers/${encodeURIComponent(parts[1] || '')}`);
+  const d = await cachedGet(`/customers/${encodeURIComponent(parts[1] || '')}`);
   const c = d.customer;
   ACT.archive = () =>
     askFirst(`Archive ${c.name}?`, 'The customer will not be offered for new bills. Old bills stay. You can bring it back any time.', 'Yes, archive', async () => {
