@@ -66,10 +66,12 @@ const isOwner = () => S.user.role === 'owner';
 const can = (perm) => isOwner() || S.user.perms.includes(perm);
 const ROLE_NAME = { owner: 'Owner', manager: 'Manager', staff: 'Staff' };
 
-// A product picture, or a plain box with an icon when there is none (or it cannot be loaded).
-const imgUrl = (id) => `${API_URL}/images/${id}`;
+// A product picture (it lives on Cloudinary), or a plain box with an icon when there is none (or it cannot be loaded).
 const noPic = (cls = '') => `<span class="pic none ${cls}">${icon('image', 26)}</span>`;
-const pic = (id, cls = '') => (id ? `<img class="pic ${cls}" src="${imgUrl(id)}" alt="" loading="lazy">` : noPic(cls));
+// A Cloudinary picture is asked for small and in the best format for the phone (f_auto, q_auto), 300 px wide.
+const cloudSmall = (url) => url.replace('/image/upload/', '/image/upload/f_auto,q_auto,c_limit,w_300/');
+// x: a product or pack, with the image_url of its picture.
+const pic = (x, cls = '') => (x && x.image_url ? `<img class="pic ${cls}" src="${esc(cloudSmall(x.image_url))}" alt="" loading="lazy">` : noPic(cls));
 // A picture that cannot be loaded becomes the plain box (the page may not use inline onerror).
 document.addEventListener(
   'error',

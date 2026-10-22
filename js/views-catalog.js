@@ -63,7 +63,7 @@ VIEWS.products = async (parts, query) => {
   const card = (p) => {
     const live = p.variants.filter((v) => v.active);
     return `<div class="card" data-item>
-      <div class="product">${pic(p.image_id, 'big')}<div class="grow">
+      <div class="product">${pic(p, 'big')}<div class="grow">
         <div class="name">${esc(p.name)}</div>
         ${p.description ? `<div class="muted small">${esc(p.description)}</div>` : ''}
         <div class="packs">${live.map((v) => `<span>${esc(v.pack_name)}</span><span class="rate">${rs(v.default_rate)}</span>`).join('')}</div>
@@ -88,7 +88,7 @@ VIEWS.product = async (parts) => {
     description: p ? p.description : '',
     packs: p ? p.variants.filter((v) => v.active).map((v) => ({ ...v })) : SUGGESTED.map((n) => ({ pack_name: n, ...parsePack(n), default_rate: '' })),
     off: p ? p.variants.filter((v) => !v.active) : [],
-    mainImage: p ? p.image_id : null,
+    main: p ? { image_id: p.image_id, image_url: p.image_url } : {},
     pending: {}, // new pictures waiting for "Save": 'main' or 'p:<pack name>' -> data: link
     remove: [], // saved pictures to delete on "Save"
   };
@@ -104,8 +104,9 @@ VIEWS.product = async (parts) => {
       pk.default_rate = $('.pk-rate', row).value;
     });
   };
-  const slotPic = (key, savedId) => (F.pending[key] ? `<img class="pic" src="${F.pending[key]}" alt="">` : savedId && !F.remove.includes(savedId) ? pic(savedId) : noPic());
-  const picButtons = (key, savedId) => `<label class="btn light sm file-btn">${icon('image', 18)} ${F.pending[key] || (savedId && !F.remove.includes(savedId)) ? 'Change' : 'Add picture'}<input type="file" accept="image/*" data-change="pickPic" data-slot="${esc(key)}"></label>
+  // saved: the product or pack, with the image_id and image_url of its saved picture.
+  const slotPic = (key, saved) => (F.pending[key] ? `<img class="pic" src="${F.pending[key]}" alt="">` : saved.image_id && !F.remove.includes(saved.image_id) ? pic(saved) : noPic());
+  const picButtons = (key, saved, savedId = saved.image_id) => `<label class="btn light sm file-btn">${icon('image', 18)} ${F.pending[key] || (savedId && !F.remove.includes(savedId)) ? 'Change' : 'Add picture'}<input type="file" accept="image/*" data-change="pickPic" data-slot="${esc(key)}"></label>
     ${F.pending[key] || (savedId && !F.remove.includes(savedId)) ? `<button class="btn danger sm" type="button" data-act="dropPic" data-slot="${esc(key)}" data-saved="${savedId || ''}">Remove</button>` : ''}`;
   const draw = () => {
     const on = new Set(F.packs.map((x) => packKey(x.pack_name)));
@@ -125,13 +126,13 @@ VIEWS.product = async (parts) => {
             <div><label class="f" for="pk-q${i}">Weight</label><input id="pk-q${i}" class="pk-qty" type="number" inputmode="decimal" step="any" min="0" value="${esc(pk.quantity)}"></div>
             <div><label class="f" for="pk-u${i}">Unit</label><select id="pk-u${i}" class="pk-unit">${S.boot.units.map((u) => `<option${u === pk.unit ? ' selected' : ''}>${u}</option>`).join('')}</select></div>
           </div>
-          <div class="pic-slot">${slotPic('p:' + packKey(pk.pack_name), pk.image_id)}<div class="grow small muted">Picture of this pack (optional)</div></div>
-          <div class="btns">${picButtons('p:' + packKey(pk.pack_name), pk.image_id)}</div>
+          <div class="pic-slot">${slotPic('p:' + packKey(pk.pack_name), pk)}<div class="grow small muted">Picture of this pack (optional)</div></div>
+          <div class="btns">${picButtons('p:' + packKey(pk.pack_name), pk)}</div>
         </div>`
         )
         .join('')}
       ${F.off.length ? `<h3>Switched-off pack sizes</h3><div class="chips">${F.off.map((v, i) => `<button type="button" class="chip" data-act="bringPack" data-i="${i}">${icon('plus', 16)} ${esc(v.pack_name)} (${rs(v.default_rate)})</button>`).join('')}</div><p class="muted small">Old bills keep them. Tap one to sell it again.</p>` : ''}`;
-    $('#pf-main').innerHTML = `<div class="pic-slot">${slotPic('main', F.mainImage)}<div class="grow small muted">Main picture, shown on the product and when making a bill</div></div><div class="btns">${picButtons('main', F.mainImage)}</div>`;
+    $('#pf-main').innerHTML = `<div class="pic-slot">${slotPic('main', F.main)}<div class="grow small muted">Main picture, shown on the product and when making a bill</div></div><div class="btns">${picButtons('main', F.main)}</div>`;
   };
   const redraw = () => {
     sync();
@@ -393,7 +394,7 @@ VIEWS.rates = async (parts) => {
     <p class="muted">Type the rate this customer pays. Leave it empty to use the normal rate. Old bills never change.</p>
     ${d.products
       .map(
-        (p) => `<div class="card"><div class="product">${pic(p.image_id)}<div class="grow"><div class="name">${esc(p.name)}</div></div></div>
+        (p) => `<div class="card"><div class="product">${pic(p)}<div class="grow"><div class="name">${esc(p.name)}</div></div></div>
         ${p.variants
           .map(
             (v) => `<div class="pick"><div class="grow"><span class="pack">${esc(v.pack_name)}</span><div class="small muted">Normal ${rs(v.default_rate)}</div></div>

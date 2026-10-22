@@ -190,11 +190,11 @@ VIEWS.order = async (parts, query) => {
   const products = list
     .map(
       (p) => `<div class="card" data-item>
-      <div class="product">${pic(p.image_id)}<div class="grow"><div class="name">${esc(p.name)}</div>${p.description ? `<div class="muted small">${esc(p.description)}</div>` : ''}</div></div>
+      <div class="product">${pic(p)}<div class="grow"><div class="name">${esc(p.name)}</div>${p.description ? `<div class="muted small">${esc(p.description)}</div>` : ''}</div></div>
       ${p.variants
         .map(
           (v) => `<div class="pick">
-          ${v.image_id ? pic(v.image_id) : ''}
+          ${v.image_id ? pic(v) : ''}
           <div class="grow"><span class="pack">${esc(v.pack_name)}</span> · <b>${rs(v.rate)}</b> ${v.customer_rate != null ? '<span class="tag own">own rate</span>' : ''}
             <div class="small red" id="a-${v.id}"></div></div>
           <div class="qty"><button data-act="dec" data-v="${v.id}" aria-label="One less ${esc(v.pack_name)}">−</button><input id="q-${v.id}" inputmode="numeric" data-input="setQty" data-v="${v.id}" aria-label="How many ${esc(p.name)} ${esc(v.pack_name)}" placeholder="0"><button data-act="inc" data-v="${v.id}" aria-label="One more ${esc(v.pack_name)}">+</button></div>
