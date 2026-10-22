@@ -293,6 +293,18 @@ VIEWS.customer = async (parts) => {
     toast('Customer is back');
     refresh();
   };
+  ACT.deleteCustomer = () =>
+    askFirst(
+      `Delete ${c.name}?`,
+      `The customer is removed with ${d.sums.n ? `all ${plural(d.sums.n, 'bill')} (${rs(d.sums.total)})` : 'everything'} and its own rates. Their bills no longer count in sales. This cannot be undone. To only hide the customer, use "Archive customer".`,
+      'Yes, delete everything',
+      async () => {
+        await api('POST', `/customers/${c.id}/delete`);
+        CUSTOMERS_CACHE = null;
+        toast('Customer deleted');
+        go('#/customers');
+      }
+    );
   const details = [
     c.gstin ? ['GSTIN', esc(c.gstin)] : null,
     c.email ? ['Email', `<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>`] : null,
@@ -321,7 +333,10 @@ VIEWS.customer = async (parts) => {
     ${can('customer_rates') && rateRows ? `<div class="btns"><a class="btn light" href="#/rates/${c.id}">${icon('tag', 18)} Change rates</a></div>` : ''}
     <h3>Bills</h3>
     ${d.orders.map(orderCard).join('') || '<div class="empty">No bills yet.</div>'}
-    ${can('customers') ? `<div class="btns">${c.active ? '<button class="btn danger sm" data-act="archive">Archive customer</button>' : '<button class="btn light sm" data-act="restore">Bring customer back</button>'}</div>` : ''}`;
+    <div class="btns">
+      ${can('customers') ? (c.active ? '<button class="btn danger sm" data-act="archive">Archive customer</button>' : '<button class="btn light sm" data-act="restore">Bring customer back</button>') : ''}
+      ${isOwner() ? '<button class="btn danger sm" data-act="deleteCustomer">Delete customer</button>' : ''}
+    </div>`;
 };
 
 VIEWS.customerform = async (parts) => {

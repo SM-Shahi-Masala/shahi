@@ -276,6 +276,12 @@ VIEWS.bill = async (parts, query) => {
     a.remove();
     toast('Bill saved in Downloads');
   };
+  ACT.deleteBill = () =>
+    askFirst(`Delete bill ${o.bill_no}?`, `The bill of ${o.customer_name} (${rs(o.total)}) is removed completely and no longer counts in sales. This cannot be undone. To keep it on record, use "Cancel this bill" instead.`, 'Yes, delete', async () => {
+      await api('POST', `/orders/${o.id}/delete`);
+      toast('Bill deleted');
+      go('#/orders');
+    });
   ACT.cancelBill = () => {
     ACT.doCancel = async () => {
       await api('POST', `/orders/${o.id}/cancel`, { reason: $('#x-reason').value });
@@ -319,5 +325,8 @@ VIEWS.bill = async (parts, query) => {
       ${can('orders') ? `<a class="btn light" href="#/order?customer=${o.customer_id}">${icon('plus', 20)} New bill for ${esc(o.customer_name)}</a>` : ''}
       <a class="btn light" href="#/orders">Done</a>
     </div>
-    ${can('cancel_orders') && o.status === 'active' ? `<div class="btns"><button class="btn danger sm" data-act="cancelBill">Cancel this bill</button></div>` : ''}`;
+    <div class="btns">
+      ${can('cancel_orders') && o.status === 'active' ? '<button class="btn danger sm" data-act="cancelBill">Cancel this bill</button>' : ''}
+      ${isOwner() ? '<button class="btn danger sm" data-act="deleteBill">Delete this bill</button>' : ''}
+    </div>`;
 };
