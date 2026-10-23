@@ -79,6 +79,11 @@ function receiptLines(o, s) {
 }
 // What will come out of the printer, for the preview on the screen (big letters are shown at normal size there).
 const receiptText = (o, s) => receiptLines(o, s).map((l) => (l.c ? l.t.padStart(Math.floor((COLS + l.t.length) / 2)) : l.t)).join('\n');
+// The same preview with the QR drawn as it is printed.
+const receiptPreview = (o, s) =>
+  `<div class="receipt">${receiptLines(o, s)
+    .map((l) => (l.qr ? qrSvg(l.qr, 150) : `<pre>${esc(l.c ? l.t.padStart(Math.floor((COLS + l.t.length) / 2)) : l.t) || ' '}</pre>`))
+    .join('')}</div>`;
 
 // A QR code as an ESC/POS picture (GS v 0): each square is a few dots, with a white border. About 270 dots wide (paper: 384).
 function qrRaster(text) {
@@ -231,5 +236,5 @@ function choosePrinter(o) {
       <button data-act="pickWay" data-way="a4"><span class="ico">${icon('print')}</span><span><b>${PRINT_WAYS.a4}</b><br><span class="muted small">Big printer, or save as PDF.</span></span></button>
     </div>
     <h3>2 inch bill</h3>
-    <pre class="receipt">${esc(receiptText(o, S.boot.settings))}</pre>`);
+    ${receiptPreview(o, S.boot.settings)}`);
 }
