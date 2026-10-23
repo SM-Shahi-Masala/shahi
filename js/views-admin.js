@@ -7,6 +7,8 @@ VIEWS.more = async () => {
     <nav class="menu" aria-label="More">
       ${item('#/products', 'box', can('products') ? 'Products, pack sizes and rates' : 'Products and rates')}
       ${item('#/customers', 'store', 'Customers')}
+      ${can('deliver') ? item('#/deliveries', 'truck', 'Deliveries') : ''}
+      ${can('expenses') ? item('#/expenses', 'money', 'Expenses') : ''}
       ${can('reports') ? item('#/reports', 'chart', 'Sales reports') : ''}
       ${isOwner() ? item('#/users', 'users', 'Users and permissions') : ''}
       ${isOwner() ? item('#/settings', 'settings', 'Business details and bill') : ''}
@@ -42,7 +44,7 @@ VIEWS.reports = async () => {
     Object.assign(REPORT, { period: 'custom', from: $('#r-from').value, to: $('#r-to').value });
     refresh();
   };
-  const file = (what) => `SHAHI-${what}-${r.from}-to-${r.to}.csv`;
+  const file = (what) => `SM-Shahi-${what}-${r.from}-to-${r.to}.csv`;
   ACT.csvDays = () => downloadCsv(file('sales-by-day'), [['Date', 'Bills', 'Sales'], ...r.days.map((d) => [d.day, d.bills, d.total])]);
   ACT.csvProducts = () => downloadCsv(file('sales-by-product'), [['Product', 'Pack', 'Quantity', 'Sales'], ...r.products.map((p) => [p.product, p.pack, p.qty, p.total])]);
   ACT.csvCustomers = () => downloadCsv(file('sales-by-customer'), [['Customer', 'Bills', 'Sales'], ...r.customers.map((c) => [c.customer, c.bills, c.total])]);
@@ -68,6 +70,9 @@ VIEWS.reports = async () => {
       <div class="tile"><b>${num(r.sum.bills)}</b><span>Bills</span></div>
       <div class="tile"><b>${rs(r.sum.bills ? r.sum.total / r.sum.bills : 0)}</b><span>Average bill</span></div>
       <div class="tile"><b>${num(r.cancelled.bills)}</b><span>Cancelled (${rs(r.cancelled.total)})</span></div>
+      <div class="tile"><b>${rs(r.received.total)}</b><span>Money received</span></div>
+      <div class="tile"><b>${rs(r.spent.total)}</b><span>Expenses</span></div>
+      <div class="tile"><b>${num(r.pending.bills)}</b><span>Not delivered yet (${rs(r.pending.total)})</span></div>
     </div>
     <div class="btns"><button class="btn light" data-act="csvBills">Download all bills of this period (Excel / CSV)</button></div>
     <h3>By product and pack</h3>
@@ -77,6 +82,61 @@ VIEWS.reports = async () => {
     <h3>By day</h3>
     ${table(['Date', 'Bills', 'Sales'], r.days.map((d) => `<tr><td>${fullDate(d.day)}</td><td class="num">${d.bills}</td><td class="num">${rs(d.total)}</td></tr>`), 'csvDays')}
     ${r.staff.length > 1 ? `<h3>By person</h3>${table(['Made by', 'Bills', 'Sales'], r.staff.map((s) => `<tr><td>${esc(s.name)}</td><td class="num">${s.bills}</td><td class="num">${rs(s.total)}</td></tr>`))}` : ''}`;
+};
+
+// ---------- expenses ----------
+const EXP = { month: '' };
+VIEWS.expenses = async () => {
+  if (!can('expenses')) throw new Error('You are not allowed to see expenses.');
+  const t = S.boot.today;
+  const month = EXP.month || t.slice(0, 7);
+  const d = await cachedGet(`/expenses?month=${month}`);
+  const shift = (n) => {
+    const x = new Date(Date.UTC(+month.slice(0, 4), +month.slice(5, 7) - 1 + n, 1));
+    return x.toISOString().slice(0, 7);
+  };
+  ACT.prev = () => ((EXP.month = shift(-1)), refresh());
+  ACT.next = () => ((EXP.month = shift(1)), refresh());
+  ACT.add = () => {
+    ACT.saveExpense = async () => {
+      await api('POST', '/expenses', { date: $('#ex-date').value, category: chipVal('ex-type'), amount: $('#ex-amount').value, mode: chipVal('ex-mode'), note: $('#ex-note').value });
+      closeSheet();
+      toast('Expense saved');
+      refresh();
+    };
+    sheet(`<h3>New expense</h3>
+      <form data-submit="saveExpense">
+        <label class="f">Spent on</label>
+        <div class="chips" id="ex-type">${S.boot.expense_types.map((x, i) => `<button type="button" class="chip${i ? '' : ' on'}" data-act="chip" data-val="${esc(x)}">${esc(x)}</button>`).join('')}</div>
+        <label class="f" for="ex-amount">Amount ₹</label><input id="ex-amount" type="number" inputmode="decimal" min="0.01" step="0.01" required>
+        <label class="f">Paid by</label>${modeChips('ex-mode')}
+        <label class="f" for="ex-date">Date</label><input id="ex-date" type="date" value="${t}" max="${t}" required>
+        <label class="f" for="ex-note">Note (needed for "Other")</label><input id="ex-note" maxlength="200" placeholder="What was bought, for what">
+        <div class="btns"><button class="btn big" type="submit">Save expense</button></div>
+      </form>`);
+  };
+  ACT.remove = (el) =>
+    askFirst('Delete this expense?', 'Use this only for a wrong entry.', 'Yes, delete', async () => {
+      await api('POST', `/expenses/${el.dataset.id}/delete`);
+      toast('Expense deleted');
+      refresh();
+    });
+  const [y, m] = month.split('-');
+  return `<div class="btns"><button class="btn big" data-act="add">${icon('plus')} New expense</button></div>
+    <div class="row" style="margin:12px 0"><button class="btn light sm" data-act="prev" aria-label="Month before">‹</button><b>${MONTHS[m - 1]} ${y}</b>
+      <button class="btn light sm" data-act="next" aria-label="Next month"${month >= t.slice(0, 7) ? ' disabled' : ''}>›</button></div>
+    <div class="banner bad"><span>Total spent</span><b>${rs(d.total)}</b></div>
+    ${d.types.length ? `<div class="table-wrap"><table><thead><tr><th>Spent on</th><th class="num">Times</th><th class="num">Amount</th></tr></thead><tbody>${d.types.map((x) => `<tr><td>${esc(x.category)}</td><td class="num">${x.n}</td><td class="num">${rs(x.total)}</td></tr>`).join('')}</tbody></table></div>` : ''}
+    <h3>Every expense</h3>
+    ${d.list.length ? searchBox('Search expenses') : ''}
+    <div id="quick-list">${d.list
+      .map(
+        (e) => `<div class="card" data-item><div class="row"><b>${esc(e.category)}</b><b>${rs(e.amount)}</b></div>
+        <div class="row small muted"><span>${dots(dayLabel(e.date), esc(e.mode), esc(e.note), 'by ' + esc(e.by))}</span>
+        ${isOwner() ? `<button class="btn danger sm" data-act="remove" data-id="${e.id}">Delete</button>` : ''}</div></div>`
+      )
+      .join('')}</div>
+    ${d.list.length ? '' : '<div class="empty">No expenses in this month.</div>'}`;
 };
 
 // ---------- users and permissions (owner only) ----------

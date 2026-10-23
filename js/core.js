@@ -8,7 +8,7 @@ const rs = (n) => '₹' + Number(n || 0).toLocaleString('en-IN', { maximumFracti
 const rs2 = (n) => '₹' + Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const num = (n) => Number(n || 0).toLocaleString('en-IN');
 
-const S = { user: null, boot: null, bootAt: 0, business: 'SHAHI' };
+const S = { user: null, boot: null, bootAt: 0, business: 'S M Shahi' };
 const VIEWS = {};
 const GLOBAL_ACT = {};
 let ACT = {}; // actions of the page that is open now
@@ -37,6 +37,8 @@ const ICONS = {
   image: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/>',
   search: '<circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/>',
   edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13 7l4 4"/>',
+  truck: '<path d="M2 6h11v10H2z"/><path d="M13 9h4l4 4v3h-8"/><circle cx="6" cy="17.5" r="2"/><circle cx="17" cy="17.5" r="2"/>',
+  money: '<rect x="2.5" y="6" width="19" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 9v.01M18 15v.01"/>',
   wa: '<path d="M3.5 20.5l1.3-4.2A8.5 8.5 0 1 1 8 19.4z"/><path d="M9 8.5c0 3.5 3 6.5 6.5 6.5l1-1.6-2.2-1-1 .9c-1-.5-2.1-1.5-2.6-2.6l.9-1-1-2.2z"/>',
 };
 const icon = (name, size = 22) =>
@@ -287,13 +289,14 @@ function navItems() {
     ['home', 'home', 'Home'],
     ['orders', 'orders', 'Orders'],
     can('orders') ? ['order', 'plus', 'New bill', 'main'] : null,
+    can('deliver') ? ['deliveries', 'truck', 'Deliveries'] : null,
     ['customers', 'store', 'Customers'],
     ['more', 'menu', 'More'],
   ].filter(Boolean);
 }
-const PARENT = { bill: 'orders', customer: 'customers', customerform: 'customers', rates: 'customers', product: 'more', products: 'more' };
+const PARENT = { bill: 'orders', billedit: 'orders', expenses: 'more', customer: 'customers', customerform: 'customers', rates: 'customers', product: 'more', products: 'more' };
 const TITLES = {
-  orders: 'Orders', order: 'New bill', bill: 'Bill', customers: 'Customers', customer: 'Customer', customerform: 'Customer details', rates: 'Rates for this customer',
+  orders: 'Orders', order: 'New bill', bill: 'Bill', billedit: 'Edit bill', deliveries: 'Deliveries', expenses: 'Expenses', customers: 'Customers', customer: 'Customer', customerform: 'Customer details', rates: 'Rates for this customer',
   products: 'Products', product: 'Product', more: 'More', reports: 'Sales reports', users: 'Users', user: 'User', settings: 'Business details', pin: 'Change PIN',
 };
 
@@ -416,7 +419,7 @@ function viewLogin() {
   };
   document.body.classList.add('login-page');
   $('#app').innerHTML = `<form class="login" data-submit="login">
-    <img class="logo" src="icons/shahi-512.png" alt="SHAHI – Taste the Difference">
+    <img class="logo" src="icons/shahi-512.png" alt="S M Shahi – Taste the Difference">
     <h1>${esc(S.business)}</h1>
     <p class="muted">Login with your mobile number and PIN</p>
     <label class="f" for="l-mobile">Mobile number</label>
@@ -455,6 +458,28 @@ async function logout() {
   render();
 }
 GLOBAL_ACT.logout = logout;
+
+// ---------- the customer's balance ----------
+// balance = old balance + delivered orders - money received. Less than 0: the customer paid in advance.
+const balTag = (b) =>
+  b > 0 ? `<span class="tag due">${rs(b)} due</span>` : b < 0 ? `<span class="tag active">${rs(-b)} advance</span>` : '<span class="tag">No balance</span>';
+// The money lines under the total of a bill, the same as on the PDF: [label, amount, bold].
+function balanceRows(o) {
+  if (o.status === 'cancelled' || o.balance == null) return [];
+  const bal = Number(o.balance);
+  if (o.status === 'pending') {
+    if (!bal) return [];
+    return [
+      [bal < 0 ? 'Paid in advance' : 'Old balance', Math.abs(bal), false],
+      ['Total to pay', Math.max(0, bal + o.total), true],
+    ];
+  }
+  const out = [];
+  if (o.paid) out.push([`Paid${o.paid_how ? ' (' + o.paid_how + ')' : ''}`, o.paid, false]);
+  out.push(bal < 0 ? ['Paid in advance', -bal, true] : ['Balance to pay', bal, true]);
+  return out;
+}
+const STATUS_TAG = { pending: '<span class="tag own">To deliver</span>', delivered: '<span class="tag active">Delivered</span>', cancelled: '<span class="tag cancelled">Cancelled</span>' };
 
 // Saves a list as a CSV file (opens in Excel).
 function downloadCsv(name, rows) {

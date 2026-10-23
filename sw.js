@@ -2,7 +2,7 @@
 // and the newest version is fetched in the background (it is used on the next opening).
 // Data is never cached here: it comes from Supabase (another address), or from /api on this computer, and both are left alone.
 // Change CACHE after uploading new files, so phones throw the old copy away.
-const CACHE = 'shahi-v5';
+const CACHE = 'shahi-v6';
 const HOME = new URL('./', location.href).href;
 
 self.addEventListener('install', () => self.skipWaiting());

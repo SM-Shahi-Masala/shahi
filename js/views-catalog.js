@@ -28,14 +28,19 @@ function shrinkPicture(fileObj) {
   });
 }
 
-// "500g" -> 500 g, "1 kg" -> 1 kg, "250 ml" -> 250 ml. Anything else: no weight.
+// "500g" -> 500 g, "1 kg" -> 1 kg, "20pc" -> 20 pcs, "Hanger (25pc)" -> 25 pcs. Anything else: no weight.
 function parsePack(name) {
+  const inside = /\((\d+)\s*(?:pcs|pc)\)/i.exec(name);
+  if (inside) return { quantity: Number(inside[1]), unit: 'pcs' };
+  if (/^\s*hanger\s*$/i.test(name)) return { quantity: HANGER_PCS, unit: 'pcs' };
   const m = /^\s*(\d+(?:\.\d+)?)\s*(g|gm|gms|kg|ml|l|ltr|pcs|pc)?\s*$/i.exec(name);
   if (!m) return { quantity: '', unit: 'g' };
   const u = (m[2] || 'g').toLowerCase();
   return { quantity: Number(m[1]), unit: { gm: 'g', gms: 'g', ltr: 'l', pc: 'pcs' }[u] || u };
 }
-const SUGGESTED = ['50g', '500g', '1kg'];
+// A hanger holds 25 pieces: ticking it adds the pack "Hanger (25pc)".
+const HANGER_PCS = 25;
+const SUGGESTED = ['20pc', '30pc', `Hanger (${HANGER_PCS}pc)`, '500g', '1kg'];
 const packKey = (name) => String(name).toLowerCase().replace(/\s+/g, '');
 
 const rateHistory = (list) =>
@@ -86,7 +91,7 @@ VIEWS.product = async (parts) => {
   const F = {
     name: p ? p.name : '',
     description: p ? p.description : '',
-    packs: p ? p.variants.filter((v) => v.active).map((v) => ({ ...v })) : SUGGESTED.map((n) => ({ pack_name: n, ...parsePack(n), default_rate: '' })),
+    packs: p ? p.variants.filter((v) => v.active).map((v) => ({ ...v })) : [],
     off: p ? p.variants.filter((v) => !v.active) : [],
     main: p ? { image_id: p.image_id, image_url: p.image_url } : {},
     pending: {}, // new pictures waiting for "Save": 'main' or 'p:<pack name>' -> data: link
@@ -187,7 +192,7 @@ VIEWS.product = async (parts) => {
     };
     sheet(`<h3>Add another pack size</h3>
       <form data-submit="saveNewPack">
-        <label class="f" for="np-name">Pack size name</label><input id="np-name" required maxlength="40" placeholder="250g, 100g, 2kg, 10 pcs…" data-input="npGuess">
+        <label class="f" for="np-name">Pack size name</label><input id="np-name" required maxlength="40" placeholder="250g, 100g, 2kg, 10pc, Hanger (25pc)…" data-input="npGuess">
         <div class="two"><div><label class="f" for="np-qty">Weight</label><input id="np-qty" type="number" inputmode="decimal" step="any" min="0"></div>
         <div><label class="f" for="np-unit">Unit</label><select id="np-unit">${S.boot.units.map((u) => `<option>${u}</option>`).join('')}</select></div></div>
         <label class="f" for="np-rate">Normal rate ₹</label><input id="np-rate" type="number" inputmode="decimal" step="0.01" min="0.01">
@@ -240,11 +245,11 @@ VIEWS.product = async (parts) => {
     ${p && p.archived_at ? '<div class="banner bad">This product is archived. Bring it back from the Archived list first.</div>' : ''}
     <h3>1. Product name</h3>
     <label class="f" for="pf-name">Product name</label>
-    <input id="pf-name" value="${esc(F.name)}" required maxlength="120" placeholder="SHAHI Green Chicken Masala">
+    <input id="pf-name" value="${esc(F.name)}" required maxlength="120" placeholder="S M Shahi Green Chicken Masala">
     <label class="f" for="pf-desc">Description (optional)</label>
     <textarea id="pf-desc" maxlength="500">${esc(F.description)}</textarea>
     <h3>2. Pack sizes and normal rates</h3>
-    <p class="muted small">Tap the sizes you sell. The normal rate is used for every customer who has no own rate.</p>
+    <p class="muted small">Tap the sizes you sell. A hanger is saved as 25 pieces. The normal rate is used for every customer who has no own rate.</p>
     <div id="pf-packs"></div>
     <h3>3. Pictures</h3>
     <div class="card" id="pf-main"></div>
@@ -255,24 +260,40 @@ VIEWS.product = async (parts) => {
 };
 
 // ---------- customers ----------
+// The customers list is sorted by name or by the highest balance (remembered while the app is open).
+const CUSTOMER_SORT = { by: 'name' };
 VIEWS.customers = async (parts, query) => {
   const archived = query.show === 'archived';
-  const { list } = await cachedGet('/customers' + (archived ? '?archived=1' : ''));
+  const qs = new URLSearchParams();
+  if (archived) qs.set('archived', '1');
+  if (CUSTOMER_SORT.by === 'balance') qs.set('sort', 'balance');
+  const d = await cachedGet('/customers' + (qs.toString() ? '?' + qs : ''));
+  const list = d.list;
   ACT.ready = () => {
     if (query.q) {
       $('#quick-q').value = query.q;
       quickApply();
     }
   };
+  ACT.sort = (el) => {
+    CUSTOMER_SORT.by = el.dataset.val;
+    refresh();
+  };
+  const owing = list.filter((c) => c.balance > 0).length;
   return `${can('customers') || can('orders') ? `<div class="btns"><a class="btn big" href="#/customerform">${icon('plus')} New customer</a></div>` : ''}
     ${can('customers') ? `<div class="tabs"><a href="#/customers" class="${archived ? '' : 'on'}">Active</a><a href="#/customers?show=archived" class="${archived ? 'on' : ''}">Archived</a></div>` : ''}
+    <div class="tiles">
+      <div class="tile"><b>${num(d.count)}</b><span>${archived ? 'Archived customers' : 'Customers'}</span></div>
+      <div class="tile"><b>${rs(d.total_balance)}</b><span>Total balance${owing ? ` (${owing} owe)` : ''}</span></div>
+    </div>
+    <div class="chips">${[['name', 'A to Z'], ['balance', 'Highest balance first']].map(([v, l]) => `<button class="chip${CUSTOMER_SORT.by === v ? ' on' : ''}" data-act="sort" data-val="${v}">${l}</button>`).join('')}</div>
     ${searchBox('Search: name, mobile, address')}
     <div id="quick-list">${list
       .map(
         (c) => `<a class="card" href="#/customer/${c.id}" data-item>
-        <div class="row"><b>${esc(c.name)}</b>${c.own_rates ? `<span class="tag own">${plural(c.own_rates, 'own rate')}</span>` : ''}</div>
+        <div class="row"><b>${esc(c.name)}</b>${c.balance ? balTag(c.balance) : ''}</div>
         <div class="muted small">${dots(esc(c.mobile), esc(c.address))}</div>
-        ${c.last_order ? `<div class="small muted">Last bill: ${dayLabel(c.last_order)}</div>` : ''}
+        <div class="row small muted"><span>${c.last_order ? `Last bill: ${dayLabel(c.last_order)}` : ''}</span>${c.own_rates ? `<span class="tag own">${plural(c.own_rates, 'own rate')}</span>` : ''}</div>
       </a>`
       )
       .join('')}</div>
@@ -296,7 +317,7 @@ VIEWS.customer = async (parts) => {
   ACT.deleteCustomer = () =>
     askFirst(
       `Delete ${c.name}?`,
-      `The customer is removed with ${d.sums.n ? `all ${plural(d.sums.n, 'bill')} (${rs(d.sums.total)})` : 'everything'} and its own rates. Their bills no longer count in sales. This cannot be undone. To only hide the customer, use "Archive customer".`,
+      `The customer is removed with ${d.sums.n ? `all ${plural(d.sums.n, 'bill')} (${rs(d.sums.total)})` : 'everything'}, the money received and its own rates. Their bills no longer count in sales. This cannot be undone. To only hide the customer, use "Archive customer".`,
       'Yes, delete everything',
       async () => {
         await api('POST', `/customers/${c.id}/delete`);
@@ -305,7 +326,15 @@ VIEWS.customer = async (parts) => {
         go('#/customers');
       }
     );
+  ACT.receive = () => receiveSheet(c, refresh);
+  ACT.deletePayment = (el) =>
+    askFirst('Delete this money received?', 'Use this only for a wrong entry. The amount goes back on the balance of the customer.', 'Yes, delete', async () => {
+      await api('POST', `/payments/${el.dataset.id}/delete`);
+      toast('Deleted');
+      refresh();
+    });
   const details = [
+    c.opening_balance ? ['Old balance (before the app)', rs(c.opening_balance)] : null,
     c.gstin ? ['GSTIN', esc(c.gstin)] : null,
     c.email ? ['Email', `<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>`] : null,
     c.credit_limit ? ['Credit limit', rs(c.credit_limit)] : null,
@@ -327,12 +356,25 @@ VIEWS.customer = async (parts) => {
       ${c.mobile ? tel(c.mobile, 'btn light') + `<a class="btn light" href="https://wa.me/91${esc(c.mobile)}" target="_blank" rel="noopener">${icon('wa', 18)} WhatsApp</a>` : ''}
       ${can('customers') ? `<a class="btn light" href="#/customerform/${c.id}">${icon('edit', 18)} Edit</a>` : ''}
     </div>
-    <div class="tiles"><div class="tile"><b>${num(d.sums.n)}</b><span>Bills</span></div><div class="tile"><b>${rs(d.sums.total)}</b><span>Total bought</span></div></div>
+    <div class="tiles">
+      <div class="tile"><b class="${c.balance > 0 ? 'red' : 'green'}">${rs(Math.abs(c.balance))}</b><span>${c.balance < 0 ? 'Paid in advance' : 'Balance to pay'}</span></div>
+      <div class="tile"><b>${num(d.sums.n)}</b><span>Bills</span></div>
+      <div class="tile"><b>${rs(d.sums.total)}</b><span>Total bought</span></div>
+    </div>
+    ${can('deliver') ? `<div class="btns"><button class="btn light" data-act="receive">${icon('money', 20)} Receive money</button></div>` : ''}
     <h3>Rates for ${esc(c.name)}</h3>
     ${rateRows ? `<div class="table-wrap"><table><thead><tr><th>Product</th><th>Pack</th><th class="num">Normal</th><th class="num">This customer</th></tr></thead><tbody>${rateRows}</tbody></table></div>` : '<div class="empty">No products yet.</div>'}
     ${can('customer_rates') && rateRows ? `<div class="btns"><a class="btn light" href="#/rates/${c.id}">${icon('tag', 18)} Change rates</a></div>` : ''}
     <h3>Bills</h3>
     ${d.orders.map(orderCard).join('') || '<div class="empty">No bills yet.</div>'}
+    <h3>Money received</h3>
+    ${d.payments
+      .map(
+        (p) => `<div class="card"><div class="row"><b class="green">${rs(p.amount)}</b><span class="muted small">${dayLabel(p.date)}</span></div>
+        <div class="row small muted"><span>${dots(esc(p.mode), p.bill_no ? 'on delivery of ' + esc(p.bill_no) : 'Received', esc(p.note), 'by ' + esc(p.by))}</span>
+        ${isOwner() ? `<button class="btn danger sm" data-act="deletePayment" data-id="${p.id}">Delete</button>` : ''}</div></div>`
+      )
+      .join('') || '<div class="empty">No money received yet.</div>'}
     <div class="btns">
       ${can('customers') ? (c.active ? '<button class="btn danger sm" data-act="archive">Archive customer</button>' : '<button class="btn light sm" data-act="restore">Bring customer back</button>') : ''}
       ${isOwner() ? '<button class="btn danger sm" data-act="deleteCustomer">Delete customer</button>' : ''}
@@ -351,6 +393,7 @@ VIEWS.customerform = async (parts) => {
     gstin: $('#cf-gstin').value,
     credit_limit: $('#cf-credit').value,
     payment_terms_days: $('#cf-days').value,
+    opening_balance: $('#cf-opening').value,
     force,
   });
   const saveNew = async (force) => {
@@ -379,6 +422,8 @@ VIEWS.customerform = async (parts) => {
     ${field('name', 'Name (shop, hotel or person)', c?.name, 'required maxlength="120"')}
     ${field('mobile', 'Mobile number (for WhatsApp)', c?.mobile, 'type="tel" inputmode="numeric" maxlength="10" data-input="digits" placeholder="10 digits"')}
     <label class="f" for="cf-address">Address</label><textarea id="cf-address" maxlength="400">${esc(c?.address)}</textarea>
+    ${field('opening', 'Old balance ₹ (money they owed before, optional)', c?.opening_balance || '', 'type="number" inputmode="decimal" step="0.01" placeholder="0"')}
+    <p class="muted small">Write it with a minus (−500) if they paid in advance. It is added to their balance and shown on their next bill.</p>
     <details ${c && (c.email || c.gstin || c.credit_limit || c.payment_terms_days) ? 'open' : ''}><summary class="f" style="cursor:pointer;padding:12px 0;font-weight:600">More details (optional)</summary>
       ${field('email', 'Email', c?.email, 'type="email" maxlength="120"')}
       ${field('gstin', 'GSTIN', c?.gstin, 'maxlength="15" style="text-transform:uppercase"')}

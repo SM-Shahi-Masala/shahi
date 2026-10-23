@@ -61,6 +61,7 @@ function receiptLines(o, s) {
   }
   add(RULE);
   add(sides('TOTAL', 'Rs ' + money2(o.total)), { b: 1 });
+  for (const [label, v, strong] of balanceRows(o)) add(sides(label, 'Rs ' + money2(v)), { b: strong ? 1 : 0 });
   add(RULE);
   if (o.status === 'cancelled') add('*** CANCELLED ***', { c: 1, b: 1 });
   const note = o.note || s.bill_note;
