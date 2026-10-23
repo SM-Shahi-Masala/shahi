@@ -70,9 +70,9 @@ VIEWS.reports = async () => {
       <div class="tile"><b>${num(r.sum.bills)}</b><span>Bills</span></div>
       <div class="tile"><b>${rs(r.sum.bills ? r.sum.total / r.sum.bills : 0)}</b><span>Average bill</span></div>
       <div class="tile"><b>${num(r.cancelled.bills)}</b><span>Cancelled (${rs(r.cancelled.total)})</span></div>
-      <div class="tile"><b>${rs(r.received.total)}</b><span>Money received</span></div>
-      <div class="tile"><b>${rs(r.spent.total)}</b><span>Expenses</span></div>
-      <div class="tile"><b>${num(r.pending.bills)}</b><span>Not delivered yet (${rs(r.pending.total)})</span></div>
+      ${r.received ? `<div class="tile"><b>${rs(r.received.total)}</b><span>Money received</span></div>` : ""}
+      ${r.spent ? `<div class="tile"><b>${rs(r.spent.total)}</b><span>Expenses</span></div>` : ""}
+      ${r.pending ? `<div class="tile"><b>${num(r.pending.bills)}</b><span>Not delivered yet (${rs(r.pending.total)})</span></div>` : ""}
     </div>
     <div class="btns"><button class="btn light" data-act="csvBills">Download all bills of this period (Excel / CSV)</button></div>
     <h3>By product and pack</h3>
@@ -229,6 +229,11 @@ VIEWS.settings = async () => {
     <p class="muted small">Bill numbers look like ${esc((s.bill_prefix || 'SH').toUpperCase())}-${S.boot.today.slice(0, 4)}-000001 and start again from 1 every year.</p>
     ${field('bill_note', 'Note on every bill (when the bill has no own note)', 'maxlength="300"')}
     ${field('bill_footer', 'Last line of the bill', 'maxlength="120"')}
+    <h3>UPI QR on bills</h3>
+    ${field('business_upi', 'UPI ID the QR pays to', 'maxlength="100" placeholder="8453338197@ybl" autocapitalize="off"')}
+    <p class="muted small">The QR asks for exactly the amount to pay on that bill; the customer cannot change it. Leave empty for no QR on any bill.</p>
+    <label class="f" for="s-upi_qr_default">New bills</label>
+    <select id="s-upi_qr_default"><option value="1"${s.upi_qr_default !== '0' ? ' selected' : ''}>Get the UPI QR (can be taken off on each bill)</option><option value="0"${s.upi_qr_default === '0' ? ' selected' : ''}>No UPI QR (can be put on each bill)</option></select>
     <div class="btns"><button class="btn big" type="submit">Save</button></div>
   </form>`;
 };

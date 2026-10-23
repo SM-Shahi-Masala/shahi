@@ -63,6 +63,14 @@ function receiptLines(o, s) {
   add(sides('TOTAL', 'Rs ' + money2(o.total)), { b: 1 });
   for (const [label, v, strong] of balanceRows(o)) add(sides(label, 'Rs ' + money2(v)), { b: strong ? 1 : 0 });
   add(RULE);
+  // UPI QR for exactly the amount to pay, printed as a picture.
+  const qr = billQr(o);
+  if (qr) {
+    add('Scan to pay Rs ' + money2(amountToPay(o)), { c: 1, b: 1 });
+    L.push({ t: '[ UPI QR code ]', c: 1, qr });
+    add('UPI: ' + s.business_upi, { c: 1 });
+    add(RULE);
+  }
   if (o.status === 'cancelled') add('*** CANCELLED ***', { c: 1, b: 1 });
   const note = o.note || s.bill_note;
   if (note) for (const t of wrapText(note)) add(t, { c: 1 });
@@ -72,11 +80,39 @@ function receiptLines(o, s) {
 // What will come out of the printer, for the preview on the screen (big letters are shown at normal size there).
 const receiptText = (o, s) => receiptLines(o, s).map((l) => (l.c ? l.t.padStart(Math.floor((COLS + l.t.length) / 2)) : l.t)).join('\n');
 
+// A QR code as an ESC/POS picture (GS v 0): each square is a few dots, with a white border. About 270 dots wide (paper: 384).
+function qrRaster(text) {
+  const m = qrMatrix(text);
+  const q = m.length + 8;
+  const scale = Math.max(2, Math.min(6, Math.floor(288 / q)));
+  const w = q * scale;
+  const wb = Math.ceil(w / 8);
+  const out = [0x1d, 0x76, 0x30, 0x00, wb & 255, wb >> 8, w & 255, w >> 8];
+  for (let y = 0; y < w; y++) {
+    const r = Math.floor(y / scale) - 4;
+    for (let xb = 0; xb < wb; xb++) {
+      let byte = 0;
+      for (let bit = 0; bit < 8; bit++) {
+        const c = Math.floor((xb * 8 + bit) / scale) - 4;
+        if (r >= 0 && r < m.length && c >= 0 && c < m.length && m[r][c]) byte |= 0x80 >> bit;
+      }
+      out.push(byte);
+    }
+  }
+  return out;
+}
+
 // The same lines as ESC/POS printer commands.
 function receiptBytes(o, s) {
   const out = [0x1b, 0x40]; // start fresh
   const push = (...b) => out.push(...b);
   for (const l of receiptLines(o, s)) {
+    if (l.qr) {
+      push(0x1b, 0x61, 1, 0x1b, 0x45, 0, 0x1d, 0x21, 0);
+      push(...qrRaster(l.qr));
+      push(0x0a);
+      continue;
+    }
     push(0x1b, 0x61, l.c ? 1 : 0); // centre or left
     push(0x1b, 0x45, l.b ? 1 : 0); // bold
     push(0x1d, 0x21, l.big ? 0x11 : 0x00); // double width and height

@@ -223,6 +223,9 @@ body.login-page .login { margin-top: 6vh; padding: 28px 22px; background: var(--
 .bill table td, .bill table th { padding: 7px 5px; white-space: normal; }
 .bill .total-row td { font-size: 18px; font-weight: 800; color: var(--red-dark); border-top: 2px solid var(--ink); }
 .bill .money-row td { font-size: 14px; color: var(--muted); }
+.pay-qr { display: flex; align-items: center; gap: 14px; margin: 14px 0 6px; padding: 10px; border: 1px dashed var(--field); border-radius: 12px; break-inside: avoid; }
+.pay-qr svg { flex: none; }
+.pay-qr .total { font-size: 22px; font-weight: 800; margin: 2px 0; }
 .bill .money-row + .total-row td, .bill .total-row + .total-row td { border-top-width: 1px; font-size: 16px; }
 .bill-foot { text-align: center; font-weight: 700; color: var(--red); padding: 10px; border-top: 1px dashed var(--line); }
 .stamp { border: 3px solid var(--red); color: var(--red); font-weight: 800; text-align: center; padding: 6px; border-radius: 10px; margin: 8px 0; letter-spacing: .1em; }

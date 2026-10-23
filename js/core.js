@@ -172,6 +172,7 @@ const store = {
 
 // GET with the phone's copy: the saved answer at once (and a quiet check with the server), or the server's answer when nothing is saved yet.
 async function cachedGet(url) {
+  viewUrls.add(url);
   const hit = store.read(url);
   if (!hit) {
     const data = await api('GET', url);
@@ -190,6 +191,37 @@ async function cachedGet(url) {
   }
   return hit.data;
 }
+
+// ---------- the open screen checks the server again every 10 seconds ----------
+// Only the data of the screen that is open is asked again; the screen is drawn again only when something changed.
+// Never while the person types, has a box (sheet) open, or is on a form; not when the app is in the background.
+const AUTO_MS = 10000;
+const NO_AUTO = new Set(['order', 'billedit', 'product', 'customerform', 'rates', 'settings', 'user', 'pin']);
+let viewUrls = new Set(); // what the open screen was drawn from
+let autoBusy = false;
+async function autoRefresh() {
+  if (autoBusy || !S.user || document.hidden || $('#sheet')?.classList.contains('open')) return;
+  if (NO_AUTO.has(parseHash().parts[0]) || !viewUrls.size) return;
+  const a = document.activeElement;
+  if ((a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) || $('#quick-q')?.value) return;
+  autoBusy = true;
+  const token = renderToken;
+  try {
+    let changed = false;
+    for (const url of [...viewUrls]) {
+      const hit = store.read(url);
+      const fresh = await api('GET', url);
+      store.write(url, fresh);
+      if (!hit || JSON.stringify(hit.data) !== JSON.stringify(fresh)) changed = true;
+    }
+    if (changed && token === renderToken && !$('#sheet').classList.contains('open')) render(true);
+  } catch {
+    // no internet for a moment: the next round tries again
+  } finally {
+    autoBusy = false;
+  }
+}
+setInterval(autoRefresh, AUTO_MS);
 
 let toastTimer;
 function toast(msg, isError) {
@@ -328,6 +360,7 @@ async function render(keepScroll) {
   shell(name);
   const main = $('#main');
   if (keepScroll !== true) main.innerHTML = '<div class="loading">Loading…</div>';
+  viewUrls = new Set();
   try {
     const html = await VIEWS[name](parts, query);
     if (token !== renderToken) return;
@@ -479,6 +512,20 @@ function balanceRows(o) {
   out.push(bal < 0 ? ['Paid in advance', -bal, true] : ['Balance to pay', bal, true]);
   return out;
 }
+// ---------- UPI QR on the bill ----------
+// The money the QR asks for, the same as on the PDF: "Total to pay" before delivery, "Balance to pay" after.
+const amountToPay = (o) => (o.status === 'cancelled' ? 0 : Math.max(0, Math.round((o.status === 'pending' ? Number(o.balance || 0) + Number(o.total) : Number(o.balance || 0)) * 100) / 100));
+// This bill shows a QR: switched on for it, a UPI ID is set, and something is left to pay.
+const billQr = (o) => (o.upi_qr && S.boot.settings.business_upi && amountToPay(o) > 0 ? upiLink(S.boot.settings.business_upi, S.business, amountToPay(o), `Bill ${o.bill_no}`) : '');
+// The QR as a picture (SVG), with the white border scanners need.
+function qrSvg(text, px = 180) {
+  const m = qrMatrix(text);
+  const n = m.length + 8;
+  let d = '';
+  m.forEach((row, y) => row.forEach((dark, x) => dark && (d += `M${x + 4} ${y + 4}h1v1h-1z`)));
+  return `<svg class="qr" width="${px}" height="${px}" viewBox="0 0 ${n} ${n}" shape-rendering="crispEdges" role="img" aria-label="UPI QR code"><rect width="${n}" height="${n}" fill="#fff"/><path d="${d}" fill="#000"/></svg>`;
+}
+
 const STATUS_TAG = { pending: '<span class="tag own">To deliver</span>', delivered: '<span class="tag active">Delivered</span>', cancelled: '<span class="tag cancelled">Cancelled</span>' };
 
 // Saves a list as a CSV file (opens in Excel).

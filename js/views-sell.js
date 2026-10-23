@@ -77,7 +77,7 @@ VIEWS.home = async () => {
   return `<p class="muted">Hello ${esc(S.user.name)} · ${fullDate(d.today)}</p>
     ${start.join('')}
     ${can('orders') ? `<div class="btns"><a class="btn big" href="#/order">${icon('plus')} New bill</a></div>` : ''}
-    ${d.pending.n && can('deliver') ? `<a class="banner warn" href="#/deliveries"><span>${icon('truck', 20)} ${plural(d.pending.n, 'order')} to deliver · ${rs(d.pending.total)}</span><b>Open</b></a>` : ''}
+    ${d.pending && d.pending.n && can('deliver') ? `<a class="banner warn" href="#/deliveries"><span>${icon('truck', 20)} ${plural(d.pending.n, 'order')} to deliver · ${rs(d.pending.total)}</span><b>Open</b></a>` : ''}
     <div class="tiles">
       <div class="tile"><b>${num(d.day.n)}</b><span>Bills today</span></div>
       <div class="tile"><b>${rs(d.day.total)}</b><span>Sales today</span></div>
@@ -162,10 +162,12 @@ VIEWS.deliveries = async () => {
 
 // ---------- new bill ----------
 // The bill being made stays here while the person moves around the app, until it is saved.
-const DRAFT = { customer: null, qty: {}, note: '' };
+// qr: the UPI QR on this bill (null = as set in Business details).
+const DRAFT = { customer: null, qty: {}, note: '', qr: null };
 function resetDraft() {
-  Object.assign(DRAFT, { customer: null, qty: {}, note: '' });
+  Object.assign(DRAFT, { customer: null, qty: {}, note: '', qr: null });
 }
+const qrDefault = () => !!S.boot.settings.business_upi && S.boot.settings.upi_qr_default !== '0';
 let CUSTOMERS_CACHE = null;
 
 // Adding a customer quickly without leaving the bill: name, mobile, address, old balance.
@@ -260,6 +262,7 @@ VIEWS.order = async (parts, query) => {
   ACT.dec = (el) => setQty(el.dataset.v, (DRAFT.qty[el.dataset.v] || 0) - 1);
   ACT.setQty = (el) => setQty(el.dataset.v, el.value.replace(/\D/g, ''));
   ACT.note = (el) => (DRAFT.note = el.value);
+  ACT.qrDraft = (el) => (DRAFT.qr = el.checked);
   ACT.changeCustomer = () => {
     DRAFT.customer = null;
     DRAFT.qty = {};
@@ -269,7 +272,7 @@ VIEWS.order = async (parts, query) => {
   ACT.createBill = async () => {
     const items = Object.entries(DRAFT.qty).map(([variant_id, quantity]) => ({ variant_id: +variant_id, quantity }));
     if (!items.length) throw new Error('Add at least one product: tap + next to a pack size');
-    const d = await api('POST', '/orders', { customer_id: c.id, items, note: DRAFT.note });
+    const d = await api('POST', '/orders', { customer_id: c.id, items, note: DRAFT.note, upi_qr: DRAFT.qr ?? qrDefault() });
     resetDraft();
     go(`#/bill/${d.id}?new=1`);
   };
@@ -300,6 +303,7 @@ VIEWS.order = async (parts, query) => {
     ${list.length ? '' : `<div class="empty">No products to sell yet.${can('products') ? '<div class="btns"><a class="btn" href="#/product/new">Add a product</a></div>' : ' Ask the owner to add products.'}</div>`}
     <label class="f" for="o-note">Note on the bill (optional)</label>
     <input id="o-note" maxlength="300" value="${esc(DRAFT.note)}" data-input="note" placeholder="${esc(S.boot.settings.bill_note || '')}">
+    ${S.boot.settings.business_upi ? `<label class="check"><input type="checkbox" id="o-qr" data-change="qrDraft"${DRAFT.qr ?? qrDefault() ? ' checked' : ''}> UPI QR on this bill (pays ${esc(S.boot.settings.business_upi)})</label>` : ''}
     <div class="sticky-foot">
       <div class="row"><span class="muted" id="o-count"></span><span class="total" id="o-total"></span></div>
       ${c.balance ? '<div class="small muted" id="o-due" style="text-align:right"></div>' : ''}
@@ -318,6 +322,7 @@ VIEWS.bill = async (parts, query) => {
   // The bill link: works without login, but only with the long random code of this bill.
   const pdfUrl = `${API_URL}/bill/${o.bill_token}`;
   const money = balanceRows(o);
+  const qr = billQr(o);
   const message = [
     `*${S.business}*`,
     `Bill ${o.bill_no} · ${fullDate(o.bill_date)}`,
@@ -327,6 +332,7 @@ VIEWS.bill = async (parts, query) => {
     '',
     `*Total: ${rs2(o.total)}*`,
     ...money.map(([label, v, strong]) => (strong ? `*${label}: ${rs2(v)}*` : `${label}: ${rs2(v)}`)),
+    qr ? `\nPay by UPI: ${s.business_upi} (${rs2(amountToPay(o))}). The QR code is on the bill PDF.` : '',
     o.status === 'cancelled' ? '*THIS BILL WAS CANCELLED*' : '',
     o.note || s.bill_note ? '\n' + (o.note || s.bill_note) : '',
     `\nBill (PDF): ${pdfUrl}`,
@@ -371,6 +377,12 @@ VIEWS.bill = async (parts, query) => {
     toast('Bill saved in Downloads');
   };
   ACT.deliver = () => deliverSheet(o, refresh);
+  // The QR on or off for this bill: the PDF, the WhatsApp link and the print follow it.
+  ACT.toggleQr = async (el) => {
+    await api('PUT', `/orders/${o.id}/qr`, { on: el.checked });
+    toast(el.checked ? 'UPI QR is on this bill' : 'UPI QR taken off this bill');
+    refresh();
+  };
   ACT.edits = () =>
     sheet(`<h3>Changes of this bill</h3>${o.edits
       .map((e) => `<div class="card"><div class="row"><b>${rs(e.old_total)} → ${rs(e.new_total)}</b><span class="muted small">${fmtAt(e.at)}</span></div><div class="small muted">By ${esc(e.by)}</div></div>`)
@@ -415,6 +427,7 @@ VIEWS.bill = async (parts, query) => {
           ${money.map(([label, v, strong]) => `<tr class="${strong ? 'total-row' : 'money-row'}"><td colspan="3">${esc(label)}</td><td class="num">${rs2(v)}</td></tr>`).join('')}
         </tbody></table>
         ${o.status === 'cancelled' ? `<div class="stamp">CANCELLED${o.cancel_reason ? ': ' + esc(o.cancel_reason) : ''}</div>` : ''}
+        ${qr ? `<div class="pay-qr">${qrSvg(qr, 150)}<div><b>Scan to pay</b><div class="total red">${rs2(amountToPay(o))}</div><div class="small">UPI: ${esc(s.business_upi)}</div><div class="small muted">PhonePe, Google Pay, Paytm or any UPI app</div></div></div>` : ''}
         ${o.note || s.bill_note ? `<p class="small">Note: ${esc(o.note || s.bill_note)}</p>` : ''}
       </div>
       <div class="bill-foot">${esc(s.bill_footer || 'Thank you')}</div>
@@ -423,6 +436,7 @@ VIEWS.bill = async (parts, query) => {
     ${canEdit(o) ? `<div class="btns"><a class="btn light" href="#/billedit/${o.id}">${icon('edit', 20)} Edit bill (rates, quantities)</a></div>` : ''}
     <div class="btns"><button class="btn big wa" data-act="waCustomer">${icon('wa', 20)} Send to customer on WhatsApp</button></div>
     <p class="muted small no-print">${o.customer_mobile ? `Opens WhatsApp on ${esc(o.customer_mobile)}` : 'No mobile number for this customer: WhatsApp opens and you choose the chat,'} with the bill written and a link to the PDF. Press send there.</p>
+    ${s.business_upi && o.status !== 'cancelled' && can('orders') ? `<label class="check no-print"><input type="checkbox" data-change="toggleQr"${o.upi_qr ? ' checked' : ''}> UPI QR on the bill${amountToPay(o) > 0 ? ` (exactly ${rs2(amountToPay(o))})` : ' (nothing left to pay)'}: on the print, the PDF and WhatsApp</label>` : ''}
     <div class="btns"><button class="btn big" data-act="print">${icon('print', 20)} Print</button></div>
     <p class="muted small no-print">${printWay.get() ? `Prints on: ${esc(PRINT_WAYS[printWay.get()] || '')}. ` : ''}<a href="#" data-act="changePrinter">${printWay.get() ? 'Change printer' : 'Choose printer'}</a></p>
     <div class="btns">

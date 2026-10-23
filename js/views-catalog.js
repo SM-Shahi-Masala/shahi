@@ -283,7 +283,7 @@ VIEWS.customers = async (parts, query) => {
   return `${can('customers') || can('orders') ? `<div class="btns"><a class="btn big" href="#/customerform">${icon('plus')} New customer</a></div>` : ''}
     ${can('customers') ? `<div class="tabs"><a href="#/customers" class="${archived ? '' : 'on'}">Active</a><a href="#/customers?show=archived" class="${archived ? 'on' : ''}">Archived</a></div>` : ''}
     <div class="tiles">
-      <div class="tile"><b>${num(d.count)}</b><span>${archived ? 'Archived customers' : 'Customers'}</span></div>
+      <div class="tile"><b>${num(d.count ?? list.length)}</b><span>${archived ? 'Archived customers' : 'Customers'}</span></div>
       <div class="tile"><b>${rs(d.total_balance)}</b><span>Total balance${owing ? ` (${owing} owe)` : ''}</span></div>
     </div>
     <div class="chips">${[['name', 'A to Z'], ['balance', 'Highest balance first']].map(([v, l]) => `<button class="chip${CUSTOMER_SORT.by === v ? ' on' : ''}" data-act="sort" data-val="${v}">${l}</button>`).join('')}</div>
@@ -368,7 +368,7 @@ VIEWS.customer = async (parts) => {
     <h3>Bills</h3>
     ${d.orders.map(orderCard).join('') || '<div class="empty">No bills yet.</div>'}
     <h3>Money received</h3>
-    ${d.payments
+    ${(d.payments || [])
       .map(
         (p) => `<div class="card"><div class="row"><b class="green">${rs(p.amount)}</b><span class="muted small">${dayLabel(p.date)}</span></div>
         <div class="row small muted"><span>${dots(esc(p.mode), p.bill_no ? 'on delivery of ' + esc(p.bill_no) : 'Received', esc(p.note), 'by ' + esc(p.by))}</span>
